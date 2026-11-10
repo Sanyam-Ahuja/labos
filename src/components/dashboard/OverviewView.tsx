@@ -1,180 +1,155 @@
 import React from 'react';
 import { useLabStore } from '../../store/useLabStore';
-import { StatCards } from './StatCards';
 import { ClusterTelemetryChart } from './ClusterTelemetryChart';
-import { Layers, Cpu, Zap, ArrowRight, ShieldAlert, Sparkles } from 'lucide-react';
+import { Meter, STATUS, StatusChip, avg, shortLab, stateOf } from '../ui';
+import { ArrowRight, Zap } from 'lucide-react';
 
 export const OverviewView: React.FC = () => {
   const { laboratories, workstations, setActiveTab, setSelectedLabId, setSelectedMachineId } = useLabStore();
 
-  const busyNodes = workstations.filter((w) => w.status === 'in_use' || w.activeWorkload !== null).slice(0, 6);
-  const runningWorkloads = workstations.filter((w) => w.activeWorkload !== null);
+  const live = workstations.filter((w) => w.status !== 'offline');
+  const gpus = live.filter((w) => w.specs.gpu);
+  const free = workstations.filter((w) => w.status === 'available').length;
+  const jobs = workstations.filter((w) => w.activeWorkload);
+  const hottest = [...live].sort((a, b) => b.metrics.tempC - a.metrics.tempC).slice(0, 6);
+  const powerKw = (workstations.reduce((a, w) => a + w.metrics.powerWatts, 0) / 1000).toFixed(1);
+  const counts = (Object.keys(STATUS) as (keyof typeof STATUS)[]).map((k) => ({
+    k, n: workstations.filter((w) => stateOf(w) === k).length,
+  }));
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner Notice: Explicit Simulation Label */}
-      <div className="px-4 py-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
-        <div className="flex items-center space-x-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-slate-300">Deterministic Campus Simulation Active:</span>
-          <span>52 registered nodes generating real-time CPU, RAM, GPU and thermal telemetry.</span>
-        </div>
-        <span className="text-slate-500 hidden sm:inline">[ Client-Side Observability Engine ]</span>
-      </div>
-
-      {/* Primary Aggregate KPI Cards */}
-      <StatCards />
-
-      {/* Cluster Telemetry Over Time */}
-      <ClusterTelemetryChart />
-
-      {/* Facilities Overview Cards */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-            <Layers className="w-4 h-4 text-emerald-400" />
-            <span>Computing Laboratory Facilities</span>
-          </h3>
-          <button
-            onClick={() => setActiveTab('laboratories')}
-            className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center space-x-1"
-          >
-            <span>View All Seat Grids</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {laboratories.map((lab) => {
-            const labStations = workstations.filter((w) => w.labId === lab.id);
-            const avail = labStations.filter((w) => w.status === 'available').length;
-            const inUse = labStations.filter((w) => w.status === 'in_use').length;
-            const offline = labStations.filter((w) => w.status === 'offline').length;
-            const percentAvail = Math.round((avail / (labStations.length || 1)) * 100);
-
-            return (
-              <div
-                key={lab.id}
-                onClick={() => {
-                  setSelectedLabId(lab.id);
-                  setActiveTab('laboratories');
-                }}
-                className="p-4 rounded-xl bg-[#111827] border border-slate-800 hover:border-slate-700 transition-all cursor-pointer group text-left shadow-lg"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 uppercase">
-                    {lab.code}
-                  </span>
-                  {lab.gpuLab && (
-                    <span className="text-[10px] font-mono text-emerald-400 flex items-center">
-                      <Zap className="w-3 h-3 mr-0.5" /> GPU Cluster
-                    </span>
-                  )}
-                </div>
-                <h4 className="font-semibold text-white text-xs group-hover:text-emerald-400 transition-colors">
-                  {lab.name}
-                </h4>
-                <p className="text-[11px] text-slate-400 mt-1 mb-3">{lab.building} • {lab.room}</p>
-
-                <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
-                  <div className="flex justify-between text-[11px] font-mono">
-                    <span className="text-slate-400">Available:</span>
-                    <span className="text-emerald-400 font-bold">{avail} / {labStations.length}</span>
-                  </div>
-                  <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 transition-all duration-500"
-                      style={{ width: `${percentAvail}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Active Workloads & Node Spotlights */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Active Workloads */}
-        <div className="p-5 rounded-2xl bg-[#111827] border border-slate-800 shadow-xl space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Zap className="w-4 h-4 text-amber-400" />
-              <h4 className="text-sm font-bold text-white">Active Simulated Benchmark Workloads</h4>
+    <div className="space-y-8">
+      <div className="grid lg:grid-cols-[1fr_340px] gap-8">
+        {/* Seat board: every machine on campus, one tile each */}
+        <section>
+          <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+            <div>
+              <h1 className="sign text-[56px] md:text-[76px]">
+                <span className="bg-hazard px-2">{free}</span> seats free
+              </h1>
+              <p className="text-graphite mt-2">of {workstations.length} workstations across {laboratories.length} labs. Tap a tile to open the machine.</p>
             </div>
-            <button
-              onClick={() => setActiveTab('simulator')}
-              className="text-xs text-amber-400 hover:text-amber-300 flex items-center space-x-1"
-            >
-              <span>Workload Studio</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {runningWorkloads.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500 font-mono border border-dashed border-slate-800 rounded-xl">
-              No benchmarks currently assigned. Launch a simulated workload in Workload Studio.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {runningWorkloads.map((ws) => (
-                <div
-                  key={ws.id}
-                  onClick={() => setSelectedMachineId(ws.id)}
-                  className="p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 cursor-pointer flex items-center justify-between text-xs"
-                >
-                  <div>
-                    <span className="font-mono font-bold text-white text-xs">{ws.id}</span>
-                    <p className="text-amber-300 text-[11px] font-medium">{ws.activeWorkload?.name}</p>
-                  </div>
-                  <div className="text-right font-mono text-[11px]">
-                    <div className="text-emerald-400 font-bold">GPU {ws.metrics.gpuUtil}%</div>
-                    <div className="text-slate-400">CPU {ws.metrics.cpuUtil}% • {ws.metrics.tempC}°C</div>
-                  </div>
-                </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {counts.map(({ k, n }) => (
+                <span key={k} className="flex items-center gap-1.5 text-[14px]">
+                  <span className="w-3.5 h-3.5 border border-ink" style={{ background: STATUS[k].color }} />
+                  {STATUS[k].label} <b className="font-mono text-[13px]">{n}</b>
+                </span>
               ))}
             </div>
-          )}
-        </div>
-
-        {/* Highest Loaded Workstations */}
-        <div className="p-5 rounded-2xl bg-[#111827] border border-slate-800 shadow-xl space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Cpu className="w-4 h-4 text-cyan-400" />
-              <h4 className="text-sm font-bold text-white">Highest Compute Load Workstations</h4>
-            </div>
-            <button
-              onClick={() => setActiveTab('inventory')}
-              className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1"
-            >
-              <span>All Workstations</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </div>
 
-          <div className="space-y-2">
-            {busyNodes.map((ws) => (
-              <div
-                key={ws.id}
-                onClick={() => setSelectedMachineId(ws.id)}
-                className="p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/50 cursor-pointer flex items-center justify-between text-xs"
-              >
-                <div>
-                  <span className="font-mono font-bold text-white text-xs">{ws.id}</span>
-                  <p className="text-slate-400 text-[11px] truncate max-w-[200px]">
-                    {ws.specs.gpu ? ws.specs.gpu.model : ws.specs.cpu.model.split('/')[0]}
-                  </p>
+          <div className="border-t-[3px] border-ink">
+            {laboratories.map((lab) => {
+              const ws = workstations.filter((w) => w.labId === lab.id).sort((a, b) => a.row - b.row || a.col - b.col);
+              const labFree = ws.filter((w) => w.status === 'available').length;
+              return (
+                <div key={lab.id} className="grid sm:grid-cols-[200px_1fr] gap-3 py-4 border-b border-ink/30 items-center">
+                  <button
+                    className="text-left group"
+                    onClick={() => { setSelectedLabId(lab.id); setActiveTab('laboratories'); }}
+                  >
+                    <span className="font-mono text-[12px] text-graphite">{lab.code} · {lab.room}</span>
+                    <span className="sign block text-[22px] group-hover:underline decoration-hazard decoration-4 underline-offset-2">
+                      {shortLab(lab.name)}
+                    </span>
+                    <span className="text-[13px] text-graphite">{labFree} free{lab.gpuLab ? ' · GPU room' : ''}</span>
+                  </button>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ws.map((w) => {
+                      const s = STATUS[stateOf(w)];
+                      return (
+                        <button
+                          key={w.id}
+                          onClick={() => setSelectedMachineId(w.id)}
+                          title={`${w.id} — ${s.label}`}
+                          className="w-11 h-11 border-[1.5px] border-ink font-mono text-[10px] leading-none grid place-items-center hover:-translate-y-0.5 transition-transform"
+                          style={{ background: s.color, color: s.text }}
+                        >
+                          {w.id.split('-').pop()}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="text-right font-mono text-[11px]">
-                  <div className="text-cyan-400 font-bold">CPU {ws.metrics.cpuUtil}%</div>
-                  <div className="text-slate-400">RAM {ws.metrics.ramUtil}% • {ws.metrics.powerWatts}W</div>
-                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Readings column */}
+        <aside className="bg-ink text-concrete p-5 self-start">
+          <h2 className="sign text-[26px] text-hazard mb-4">Live readings</h2>
+          <dl className="space-y-4 [&_.label]:!text-idle">
+            <div><Meter label="CPU" value={avg(live.map((w) => w.metrics.cpuUtil))} color="#e3e1dc" track="#2f2f2c" /></div>
+            <div><Meter label="RAM" value={avg(live.map((w) => w.metrics.ramUtil))} color="#e3e1dc" track="#2f2f2c" /></div>
+            <div><Meter label="GPU" value={avg(gpus.map((w) => w.metrics.gpuUtil))} color="#e3e1dc" track="#2f2f2c" /></div>
+          </dl>
+          <div className="grid grid-cols-2 gap-px bg-graphite mt-6 border border-graphite">
+            {[
+              ['Power draw', `${powerKw} kW`],
+              ['Mean temp', `${avg(live.map((w) => w.metrics.tempC))} °C`],
+              ['GPU machines', `${gpus.length}`],
+              ['Jobs running', `${jobs.length}`],
+            ].map(([k, v]) => (
+              <div key={k} className="bg-ink p-3">
+                <div className="text-[12px] text-idle">{k}</div>
+                <div className="sign text-[30px] mt-1">{v}</div>
               </div>
             ))}
           </div>
-        </div>
+          <button onClick={() => setActiveTab('simulator')} className="btn btn-primary w-full justify-center mt-5">
+            <Zap size={16} /> Run a workload
+          </button>
+        </aside>
+      </div>
+
+      <ClusterTelemetryChart />
+
+      <div className="grid lg:grid-cols-2 gap-8">
+        <section>
+          <div className="flex items-baseline justify-between border-b-[3px] border-ink pb-2 mb-1">
+            <h2 className="sign text-[26px]">Jobs on the floor</h2>
+            <button onClick={() => setActiveTab('simulator')} className="label flex items-center gap-1 hover:text-ink">Workloads <ArrowRight size={14} /></button>
+          </div>
+          {jobs.length === 0 ? (
+            <p className="py-8 text-graphite">Nothing running. Start a simulated workload from section E to see the floor heat up.</p>
+          ) : (
+            <ul>
+              {jobs.map((w) => (
+                <li key={w.id}>
+                  <button onClick={() => setSelectedMachineId(w.id)} className="w-full flex items-center justify-between gap-3 py-3 border-b border-ink/20 text-left hover:bg-panel px-1">
+                    <span>
+                      <span className="font-mono text-[13px] font-semibold">{w.id}</span>
+                      <span className="block text-[14px] text-graphite">{w.activeWorkload?.name}</span>
+                    </span>
+                    <span className="font-mono text-[13px] text-right">GPU {w.metrics.gpuUtil}%<br /><span className="text-graphite">{w.metrics.tempC} °C</span></span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section>
+          <div className="flex items-baseline justify-between border-b-[3px] border-ink pb-2 mb-1">
+            <h2 className="sign text-[26px]">Running hottest</h2>
+            <button onClick={() => setActiveTab('inventory')} className="label flex items-center gap-1 hover:text-ink">Fleet <ArrowRight size={14} /></button>
+          </div>
+          <ul>
+            {hottest.map((w) => (
+              <li key={w.id}>
+                <button onClick={() => setSelectedMachineId(w.id)} className="w-full grid grid-cols-[1fr_auto_auto] items-center gap-4 py-3 border-b border-ink/20 text-left hover:bg-panel px-1">
+                  <span>
+                    <span className="font-mono text-[13px] font-semibold">{w.id}</span>
+                    <span className="block text-[14px] text-graphite truncate">{w.specs.gpu ? w.specs.gpu.model : w.specs.cpu.model.split('/')[0]}</span>
+                  </span>
+                  <StatusChip ws={w} />
+                  <span className={`sign text-[24px] w-16 text-right ${w.metrics.tempC >= 80 ? 'text-stop' : ''}`}>{w.metrics.tempC}°</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
     </div>
   );

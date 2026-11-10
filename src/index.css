@@ -1,61 +1,83 @@
 @import "tailwindcss";
 
+/* LabOS — facilities wayfinding system.
+   Concrete ground, sign-black bands, hazard yellow, ISO safety colours for state. */
+@theme {
+  --color-concrete: #e3e1dc;
+  --color-slab: #d4d1ca;
+  --color-panel: #f4f3f0;
+  --color-ink: #141414;
+  --color-graphite: #4a4945;
+  --color-dust: #77756f;
+  --color-hazard: #ffc400;
+  --color-safe: #1d7a3c;
+  --color-signal: #0057b8;
+  --color-stop: #cc2a1f;
+  --color-idle: #9a9891;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-sans: "Barlow", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
 @layer base {
-  :root {
-    --noc-bg: #06090f;
-    --noc-surface: #0a0f18;
-    --noc-border: #152233;
-    --noc-cyan: #00f0ff;
-    --noc-lime: #00ff66;
-    --noc-orange: #ff9900;
-  }
-
+  html { background: var(--color-concrete); }
   body {
-    background-color: #06090f;
-    background-image: 
-      radial-gradient(rgba(0, 240, 255, 0.04) 1px, transparent 1px),
-      linear-gradient(to bottom, #06090f 0%, #080d15 100%);
-    background-size: 20px 20px, 100% 100%;
-    color: #e2e8f0;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--color-concrete);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
   }
+  ::selection { background: var(--color-hazard); color: var(--color-ink); }
+  :focus-visible { outline: 3px solid var(--color-signal); outline-offset: 2px; }
+  select, input, textarea { font: inherit; }
+}
 
-  code, pre, .font-mono {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+@layer components {
+  .sign {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    font-weight: 700;
+    line-height: 0.95;
   }
+  .hazard-stripe {
+    background: repeating-linear-gradient(-45deg, var(--color-hazard) 0 10px, var(--color-ink) 10px 20px);
+  }
+  .plate {
+    background: var(--color-panel);
+    border: 1.5px solid var(--color-ink);
+  }
+  .field {
+    width: 100%;
+    background: #fff;
+    border: 1.5px solid var(--color-ink);
+    padding: 0.55rem 0.7rem;
+    font-size: 14px;
+    border-radius: 0;
+  }
+  .field:focus { outline: none; box-shadow: inset 0 -4px 0 var(--color-hazard); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    font-family: var(--font-display); font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; font-size: 15px;
+    padding: 0.5rem 0.95rem; border: 1.5px solid var(--color-ink);
+    background: var(--color-panel); color: var(--color-ink);
+    transition: background 120ms, color 120ms;
+  }
+  .btn:hover:not(:disabled) { background: var(--color-ink); color: var(--color-hazard); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--color-hazard); }
+  .btn-danger { background: var(--color-stop); color: #fff; border-color: var(--color-stop); }
+  .btn-danger:hover:not(:disabled) { background: var(--color-ink); color: #fff; }
+  .label { font-family: var(--font-display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 13px; color: var(--color-graphite); }
 }
 
-.noc-panel {
-  background-color: #0b111a;
-  border: 1px solid #162335;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.6);
-}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--color-slab); }
+::-webkit-scrollbar-thumb { background: var(--color-ink); }
 
-.noc-panel-hover:hover {
-  border-color: rgba(0, 240, 255, 0.3);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.08);
-}
-
-.noc-glow-cyan {
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
-}
-
-.noc-glow-lime {
-  box-shadow: 0 0 12px rgba(0, 255, 102, 0.25);
-}
-
-/* Custom scrollbars for NOC look */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #06090f;
-}
-::-webkit-scrollbar-thumb {
-  background: #1a2a40;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #00f0ff;
-}
+@keyframes blink-slow { 50% { opacity: 0.35; } }
+.blink-slow { animation: blink-slow 1.6s steps(2, end) infinite; }
+@media (prefers-reduced-motion: reduce) { .blink-slow { animation: none; } }

@@ -1,231 +1,123 @@
 import React, { useState } from 'react';
 import { useLabStore } from '../../store/useLabStore';
-import { ShieldAlert, CheckCircle2, AlertOctagon, Wrench, Plus, Clock, ExternalLink } from 'lucide-react';
+import { IncidentReport } from '../../types';
+import { PageHead } from '../ui';
+import { Check, Plus, X } from 'lucide-react';
 
-export const IncidentManager: React.FC = () => {
-  const { incidents, resolveIncident, reportIncident, workstations, setSelectedMachineId } = useLabStore();
-  const [filter, setFilter] = useState<'all' | 'open' | 'resolved'>('all');
-  const [showAddModal, setShowAddModal] = useState(false);
+type Sev = IncidentReport['severity'];
+const SEV: Record<Sev, { bg: string; fg: string }> = {
+  critical: { bg: 'var(--color-stop)', fg: '#fff' },
+  high: { bg: 'var(--color-hazard)', fg: 'var(--color-ink)' },
+  medium: { bg: 'var(--color-panel)', fg: 'var(--color-ink)' },
+  low: { bg: 'var(--color-slab)', fg: 'var(--color-graphite)' },
+};
 
-  const [targetWsId, setTargetWsId] = useState(workstations[0]?.id || '');
+export const IncidentForm: React.FC<{ fixedWsId?: string; onDone: () => void }> = ({ fixedWsId, onDone }) => {
+  const { workstations, reportIncident } = useLabStore();
+  const [wsId, setWsId] = useState(fixedWsId || workstations[0]?.id || '');
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
-  const [severity, setSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('high');
-
-  const filtered = incidents.filter((inc) => {
-    if (filter === 'open') return inc.status !== 'resolved';
-    if (filter === 'resolved') return inc.status === 'resolved';
-    return true;
-  });
-
-  const handleCreate = (e: React.FormEvent) => {
+  const [severity, setSeverity] = useState<Sev>('high');
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    const ws = workstations.find((w) => w.id === targetWsId);
-    reportIncident({
-      workstationId: targetWsId,
-      labId: ws ? ws.labId : 'turing-ai',
-      title,
-      description: desc,
-      severity,
-      status: 'investigating',
-    });
-    setShowAddModal(false);
-    setTitle('');
-    setDesc('');
+    const ws = workstations.find((w) => w.id === wsId);
+    reportIncident({ workstationId: wsId, labId: ws ? ws.labId : 'turing-ai', title, description: desc, severity, status: 'investigating' });
+    onDone();
   };
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      {!fixedWsId && (
+        <label className="block"><span className="label block mb-1">Machine</span>
+          <select className="field" value={wsId} onChange={(e) => setWsId(e.target.value)}>
+            {workstations.map((w) => <option key={w.id} value={w.id}>{w.id} · {w.labName.split(' ')[0]} ({w.status.replace('_', ' ')})</option>)}
+          </select>
+        </label>
+      )}
+      <label className="block"><span className="label block mb-1">What is wrong</span>
+        <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="GPU fan rattling, throttles under load" required />
+      </label>
+      <fieldset>
+        <legend className="label mb-1">Severity</legend>
+        <div className="grid grid-cols-4 border-[1.5px] border-ink">
+          {(['low', 'medium', 'high', 'critical'] as Sev[]).map((s) => (
+            <button type="button" key={s} onClick={() => setSeverity(s)} aria-pressed={severity === s}
+              className="sign text-[15px] py-2 border-r border-ink last:border-0"
+              style={severity === s ? { background: SEV[s].bg === 'var(--color-panel)' ? 'var(--color-ink)' : SEV[s].bg, color: SEV[s].bg === 'var(--color-panel)' ? '#fff' : SEV[s].fg } : { background: '#fff' }}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <label className="block"><span className="label block mb-1">Details</span>
+        <textarea className="field" rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Error codes, what you were running, when it started" />
+      </label>
+      <p className="text-[13px] text-graphite">Filing a fault puts the machine into maintenance and stops any job on it.</p>
+      <div className="flex gap-2 justify-end">
+        <button type="button" className="btn" onClick={onDone}>Cancel</button>
+        <button type="submit" className="btn btn-danger">File fault tag</button>
+      </div>
+    </form>
+  );
+};
 
-  const getSeverityBadge = (sev: string) => {
-    switch (sev) {
-      case 'critical':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-500/20 text-rose-400 border border-rose-500/40 font-bold uppercase">Critical</span>;
-      case 'high':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/20 text-amber-400 border border-amber-500/40 uppercase">High</span>;
-      case 'medium':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-yellow-500/20 text-yellow-300 border border-yellow-500/40 uppercase">Medium</span>;
-      default:
-        return <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400 border border-slate-700 uppercase">Low</span>;
-    }
-  };
+export const IncidentManager: React.FC = () => {
+  const { incidents, resolveIncident, setSelectedMachineId } = useLabStore();
+  const [filter, setFilter] = useState<'open' | 'resolved' | 'all'>('open');
+  const [adding, setAdding] = useState(false);
+  const open = incidents.filter((i) => i.status !== 'resolved');
+  const list = incidents.filter((i) => (filter === 'all' ? true : filter === 'open' ? i.status !== 'resolved' : i.status === 'resolved'));
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-[#111827] border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2 text-rose-400 mb-1">
-            <ShieldAlert className="w-5 h-5" />
-            <h3 className="font-bold text-white text-lg">Hardware Incidents & Fault Tracking</h3>
+    <div>
+      <PageHead code="F" title="Fault tags" note="Hardware problems reported by students and staff. A tagged machine is held in maintenance until the tag is cleared."
+        actions={<button className="btn btn-danger" onClick={() => setAdding(true)}><Plus size={16} /> Report a fault</button>} />
+
+      {adding && (
+        <div className="plate max-w-xl mb-8">
+          <div className="flex justify-between items-center bg-stop text-white px-4 py-2">
+            <span className="sign text-[20px]">New fault tag</span>
+            <button onClick={() => setAdding(false)} aria-label="Close"><X size={18} /></button>
           </div>
-          <p className="text-xs text-slate-400">
-            Lifecycle monitoring for thermal throttling, driver dropouts, parity errors, and physical workstation maintenance.
-          </p>
+          <div className="p-4"><IncidentForm onDone={() => setAdding(false)} /></div>
         </div>
+      )}
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors shadow-lg shadow-rose-600/20 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Report New Incident</span>
-        </button>
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="flex items-center space-x-2">
-        <button
-          onClick={() => setFilter('all')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
-            filter === 'all' ? 'bg-slate-800 text-white border border-slate-700' : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          All Incidents ({incidents.length})
-        </button>
-        <button
-          onClick={() => setFilter('open')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
-            filter === 'open' ? 'bg-slate-800 text-rose-400 border border-slate-700' : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          Open / Active ({incidents.filter((i) => i.status !== 'resolved').length})
-        </button>
-        <button
-          onClick={() => setFilter('resolved')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
-            filter === 'resolved' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          Resolved ({incidents.filter((i) => i.status === 'resolved').length})
-        </button>
-      </div>
-
-      {/* Incidents List */}
-      <div className="space-y-3">
-        {filtered.map((inc) => (
-          <div
-            key={inc.id}
-            className="p-5 rounded-2xl bg-[#111827] border border-slate-800 hover:border-slate-700 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
-          >
-            <div className="space-y-1.5 max-w-2xl">
-              <div className="flex items-center space-x-2">
-                <span className="font-mono text-xs font-bold text-slate-300">{inc.id}</span>
-                {getSeverityBadge(inc.severity)}
-                <span className="text-[11px] font-mono text-slate-500">• Reported {inc.reportedAt}</span>
-              </div>
-              <h4 className="text-sm font-semibold text-white">{inc.title}</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">{inc.description}</p>
-              <div className="flex items-center space-x-3 text-[11px] font-mono text-slate-400 pt-1">
-                <span>Affected Node: <button onClick={() => setSelectedMachineId(inc.workstationId)} className="text-emerald-400 hover:underline">{inc.workstationId}</button></span>
-                <span>•</span>
-                <span>Lab: {inc.labId}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2 self-start md:self-center">
-              {inc.status !== 'resolved' ? (
-                <button
-                  onClick={() => resolveIncident(inc.id)}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-medium flex items-center space-x-1.5 transition-colors"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Mark Resolved</span>
-                </button>
-              ) : (
-                <div className="text-right">
-                  <span className="inline-flex items-center space-x-1 text-emerald-400 text-xs font-mono">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>RESOLVED</span>
-                  </span>
-                  {inc.resolvedAt && (
-                    <span className="block text-[10px] text-slate-500 font-mono">at {inc.resolvedAt}</span>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+      <div className="flex border-[1.5px] border-ink w-fit mb-6" role="tablist">
+        {([['open', `Open · ${open.length}`], ['resolved', `Cleared · ${incidents.length - open.length}`], ['all', 'All']] as const).map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} className={`sign text-[16px] px-4 py-2 border-r border-ink last:border-0 ${filter === k ? 'bg-ink text-hazard' : 'bg-panel'}`}>{l}</button>
         ))}
       </div>
 
-      {/* New Incident Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#111827] border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
-            <h3 className="font-bold text-white text-base mb-4 flex items-center space-x-2 text-rose-400">
-              <ShieldAlert className="w-5 h-5" />
-              <span>Report Infrastructure Incident</span>
-            </h3>
-            <form onSubmit={handleCreate} className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Target Workstation</label>
-                <select
-                  value={targetWsId}
-                  onChange={(e) => setTargetWsId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-slate-200 focus:outline-none focus:border-rose-500"
-                >
-                  {workstations.map((ws) => (
-                    <option key={ws.id} value={ws.id}>
-                      {ws.id} — {ws.labName.split(' ')[0]} ({ws.status})
-                    </option>
-                  ))}
-                </select>
-              </div>
+      {list.length === 0 && <p className="py-16 text-center text-graphite text-[17px]">No {filter === 'open' ? 'open' : ''} faults. Every machine is cleared to run.</p>}
 
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Incident Title</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g., GPU Fan Bearing Rattle / Severe Throttling"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
-                  required
-                />
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {list.map((inc) => {
+          const done = inc.status === 'resolved';
+          return (
+            <article key={inc.id} className={`relative bg-white border-[1.5px] border-ink flex flex-col ${done ? 'opacity-70' : ''}`}>
+              {/* tag eyelet */}
+              <span className="absolute top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full border-[1.5px] border-ink bg-concrete" aria-hidden />
+              <div className="pt-9 px-4 pb-3 text-center" style={{ background: done ? 'var(--color-safe)' : SEV[inc.severity].bg, color: done ? '#fff' : SEV[inc.severity].fg }}>
+                <div className="sign text-[26px]">{done ? 'Cleared' : inc.severity === 'critical' ? 'Do not use' : `${inc.severity} fault`}</div>
+                <div className="font-mono text-[12px] mt-0.5">{inc.id}</div>
               </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Severity Level</label>
-                <select
-                  value={severity}
-                  onChange={(e) => setSeverity(e.target.value as any)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-rose-500"
-                >
-                  <option value="low">Low — Minor cosmetic or non-blocking anomaly</option>
-                  <option value="medium">Medium — Degraded performance</option>
-                  <option value="high">High — Workstation unstable / rebooting</option>
-                  <option value="critical">Critical — Complete hardware fault / unusable</option>
-                </select>
+              <div className="p-4 flex-1 flex flex-col">
+                <h3 className="font-semibold text-[16px] leading-snug">{inc.title}</h3>
+                {inc.description && <p className="text-[14px] text-graphite mt-1.5">{inc.description}</p>}
+                <dl className="grid grid-cols-2 gap-2 mt-4 text-[13px]">
+                  <div><dt className="label !text-[11px]">Machine</dt><dd><button className="font-mono underline decoration-hazard decoration-2" onClick={() => setSelectedMachineId(inc.workstationId)}>{inc.workstationId}</button></dd></div>
+                  <div><dt className="label !text-[11px]">{done ? 'Cleared' : 'Reported'}</dt><dd>{done ? inc.resolvedAt : inc.reportedAt}</dd></div>
+                  <div className="col-span-2"><dt className="label !text-[11px]">State</dt><dd className="capitalize">{inc.status}</dd></div>
+                </dl>
+                {!done && (
+                  <button className="btn mt-4 justify-center" onClick={() => resolveIncident(inc.id)}><Check size={15} /> Clear tag</button>
+                )}
               </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-300 block mb-1">Diagnostic Details</label>
-                <textarea
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                  placeholder="Include error codes, symptoms, or observed kernel logs..."
-                  rows={3}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold"
-                >
-                  Create Incident
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 };
