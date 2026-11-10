@@ -1,26 +1,61 @@
 @import "tailwindcss";
 
 @layer base {
-  body {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  :root {
+    --noc-bg: #06090f;
+    --noc-surface: #0a0f18;
+    --noc-border: #152233;
+    --noc-cyan: #00f0ff;
+    --noc-lime: #00ff66;
+    --noc-orange: #ff9900;
   }
+
+  body {
+    background-color: #06090f;
+    background-image: 
+      radial-gradient(rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, #06090f 0%, #080d15 100%);
+    background-size: 20px 20px, 100% 100%;
+    color: #e2e8f0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
   }
 }
 
-/* Custom scrollbars */
+.noc-panel {
+  background-color: #0b111a;
+  border: 1px solid #162335;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.6);
+}
+
+.noc-panel-hover:hover {
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.08);
+}
+
+.noc-glow-cyan {
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+}
+
+.noc-glow-lime {
+  box-shadow: 0 0 12px rgba(0, 255, 102, 0.25);
+}
+
+/* Custom scrollbars for NOC look */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #06090f;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #1a2a40;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #00f0ff;
 }
